@@ -20,6 +20,8 @@ import json
 import argparse
 import time
 import numpy as np
+import types
+import importlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -34,6 +36,119 @@ ACTION_NAMES = [
     "Screen Adjust",
 ]
 
+# Action IDs
+ACTION_NOTHING = 0
+ACTION_GENTLE_ALERT = 1
+ACTION_URGENT_ALERT = 2
+ACTION_BREAK_REMINDER = 3
+ACTION_STRETCH_PROMPT = 4
+ACTION_SCREEN_ADJUST = 5
+
+# Observation indices (kept local to avoid importing environment internals)
+HEAD_TILT = 0
+NECK_ANGLE = 1
+SHOULDER_DROP = 2
+BACK_CURVATURE = 3
+SCREEN_DISTANCE = 4
+SITTING_DURATION = 5
+FATIGUE_LEVEL = 6
+
+
+def _is_posture_bad_obs(obs: np.ndarray) -> bool:
+    """Lightweight posture check used by the runtime action guard."""
+    return (
+        abs(obs[HEAD_TILT]) > 15
+        or obs[NECK_ANGLE] < -15
+        or obs[SHOULDER_DROP] > 5
+        or obs[BACK_CURVATURE] > 20
+        or obs[SCREEN_DISTANCE] < 50
+        or obs[SCREEN_DISTANCE] > 70
+        or obs[SITTING_DURATION] > 45
+    )
+
+
+def _apply_action_guard(obs: np.ndarray, proposed_action: int,
+                        prev_action: int | None, repeat_count: int) -> tuple[int, int, bool]:
+    """
+    Prevent long stretches of identical interventions during demonstration runs.
+    This keeps play-time behavior readable and closer to realistic coaching.
+    """
+    if prev_action == proposed_action:
+        repeat_count += 1
+    else:
+        repeat_count = 1
+
+    action = proposed_action
+    overridden = False
+
+    if proposed_action == ACTION_STRETCH_PROMPT:
+        guard_limit = 20
+    elif proposed_action == ACTION_URGENT_ALERT:
+        guard_limit = 12
+    else:
+        guard_limit = 14
+
+    if repeat_count >= guard_limit and proposed_action != ACTION_NOTHING:
+        posture_bad = _is_posture_bad_obs(obs)
+        fatigue = float(obs[FATIGUE_LEVEL])
+        sitting = float(obs[SITTING_DURATION])
+        screen = float(obs[SCREEN_DISTANCE])
+
+        if sitting >= 60:
+            action = ACTION_BREAK_REMINDER
+        elif screen < 50 or screen > 70:
+            action = ACTION_SCREEN_ADJUST
+        elif not posture_bad and fatigue < 0.45:
+            action = ACTION_NOTHING
+        elif proposed_action == ACTION_STRETCH_PROMPT:
+            # Keep stretch behavior unless context strongly suggests a switch.
+            action = ACTION_STRETCH_PROMPT
+        elif proposed_action == ACTION_URGENT_ALERT:
+            action = ACTION_GENTLE_ALERT
+        else:
+            action = ACTION_NOTHING
+
+        overridden = action != proposed_action
+        if overridden:
+            repeat_count = 1
+
+    return int(action), int(repeat_count), overridden
+
+
+def _install_numpy_core_compat():
+    """Provide legacy numpy._core module aliases needed by older pickles."""
+    if 'numpy._core' in sys.modules:
+        return
+
+    core_pkg = types.ModuleType('numpy._core')
+    core_pkg.__path__ = []
+
+    core_modules = {
+        'numeric',
+        'multiarray',
+        'umath',
+        'numerictypes',
+        'fromnumeric',
+        'shape_base',
+        'arrayprint',
+        'records',
+        'defchararray',
+        'einsumfunc',
+        'getlimits',
+        '_multiarray_umath',
+        'overrides',
+    }
+
+    for module_name in core_modules:
+        try:
+            module = importlib.import_module(f'numpy.core.{module_name}')
+            sys.modules[f'numpy._core.{module_name}'] = module
+            setattr(core_pkg, module_name, module)
+        except Exception:
+            continue
+
+    sys.modules['numpy._core'] = core_pkg
+
 
 def load_best_model(model_choice: str):
     """
@@ -42,6 +157,8 @@ def load_best_model(model_choice: str):
     REINFORCE is implemented from scratch in PyTorch (.pt file).
     DQN and PPO are loaded from Stable-Baselines3 (.zip files).
     """
+    _install_numpy_core_compat()
+
     from stable_baselines3 import DQN, PPO
 
     # ── Try PPO (SB3 .zip) ────────────────────────────────────────
@@ -131,6 +248,8 @@ def run_episode(env, model, renderer, episode_num, export_json=False):
     total_reward = 0.0
     step         = 0
     episode_data = []
+    prev_action  = None
+    repeat_count = 0
 
     print(f"\n{'─'*60}")
     print(f"  Episode {episode_num} | Worker compliance: {info.get('worker_compliance', '?'):.2f}")
@@ -139,10 +258,17 @@ def run_episode(env, model, renderer, episode_num, export_json=False):
     while True:
         # ── Action selection ──────────────────────────────────────
         if model is not None:
-            action, _ = model.predict(obs, deterministic=True)
-            action = int(action)
+            raw_action, _ = model.predict(obs, deterministic=True)
+            raw_action = int(raw_action)
+            action, repeat_count, guarded = _apply_action_guard(
+                obs, raw_action, prev_action, repeat_count
+            )
         else:
             action = env.action_space.sample()
+            guarded = False
+            repeat_count = 1 if action == prev_action else 0
+
+        prev_action = action
 
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
@@ -160,10 +286,11 @@ def run_episode(env, model, renderer, episode_num, export_json=False):
             time.sleep(0.08)
 
         # ── Terminal verbose ──────────────────────────────────────
+        guard_tag = " [guard]" if guarded else ""
         print(
             f"  Step {step:3d} | {ACTION_NAMES[action]:16s} | "
             f"Reward: {reward:+5.2f} | Total: {total_reward:7.2f} | "
-            f"Fatigue: {obs[6]:.2f} | Bad: {info['posture_bad']}"
+            f"Fatigue: {obs[6]:.2f} | Bad: {info['posture_bad']}{guard_tag}"
         )
 
         if export_json:
