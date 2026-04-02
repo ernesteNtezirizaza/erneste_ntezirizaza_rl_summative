@@ -1,1 +1,1 @@
-"""Training package for posture RL experiments."""
+# training module
