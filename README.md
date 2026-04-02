@@ -6,7 +6,26 @@
 
 ---
 
-## 📌 Overview
+## Table of Contents
+
+- [Overview](#overview)
+- [Project Structure](#project-structure)
+- [Setup Instructions](#setup-instructions)
+- [Running the Project](#running-the-project)
+- [Experiments Summary](#experiments-summary)
+- [Visual Diagrams & Key Insights](#visual-diagrams--key-insights)
+- [Environment Details](#environment-details)
+- [Reward Structure](#reward-structure)
+- [JSON API Export](#json-api-export)
+- [Algorithm Summary](#algorithm-summary-best-runs)
+- [REINFORCE: Pure PyTorch Implementation](#reinforce-pure-pytorch-implementation)
+- [DQN: Stable-Baselines3 Implementation](#dqn-stable-baselines3-implementation)
+- [PPO: Stable-Baselines3 Implementation](#ppo-stable-baselines3-implementation)
+- [Hyperparameter Configurations](#hyperparameter-configurations-30-runs-total)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+## Overview
 
 This project implements a Reinforcement Learning (RL) agent that acts as a **real-time posture coaching system** for office workers. The agent observes biomechanical posture metrics (head tilt, neck angle, back curvature, etc.) and learns the optimal intervention strategy — balancing corrective alerts against alert fatigue — to minimise musculoskeletal disorder (MSD) risk.
 
@@ -18,34 +37,49 @@ Three RL algorithms are compared:
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
-posture_rl_project/
+erneste_ntezirizaza_rl_summative/
+├── .gitignore
+├── README.md
+├── requirements.txt
+├── main.py
+├── play.py
+├── generate_plots.py
 ├── environment/
-│   ├── __init__.py          # Module initialiser
-│   ├── custom_env.py        # Custom Gymnasium environment
-│   └── rendering.py         # Pygame 2D visualisation
+│   ├── __init__.py
+│   ├── custom_env.py
+│   └── rendering.py
 ├── training/
-│   ├── dqn_training.py      # DQN: 10 hyperparameter runs
-│   └── pg_training.py       # REINFORCE + PPO: 10 runs each
-├── models/
-│   ├── dqn/                 # Saved DQN model checkpoints
-│   └── pg/                  # Saved REINFORCE / PPO checkpoints
-├── plots/                   # All generated figures & diagrams
-├── logs/                    # Training logs & CSV result tables
+│   ├── __init__.py
+│   ├── dqn_training.py
+│   └── pg_training.py
 ├── static/
-│   └── static_demo.py       # Random-action demo (no model)
-├── play.py                  # Rubric entrypoint: run trained agent behavior
-├── main.py                  # Core runtime + model loading utilities
-├── generate_plots.py        # Generate all report diagrams
-├── requirements.txt         # Python dependencies
-└── README.md                # This file
+│   └── static_demo.py
+├── logs/
+│   ├── api_export.json
+│   ├── dqn/
+│   └── pg/
+├── models/
+│   ├── dqn/
+│   └── pg/
+└── plots/
+  ├── 01_env_architecture.png
+  ├── 02_agent_env_loop.png
+  ├── 03_reward_structure.png
+  ├── 04_training_curves.png
+  ├── 05_hp_heatmap.png
+  ├── 06_convergence.png
+  ├── 07_entropy_curves.png
+  ├── 08_dqn_objective.png
+  ├── 09_generalisation.png
+  └── 10_algorithm_comparison.png
 ```
 
 ---
 
-## ⚙️ Setup Instructions
+## Setup Instructions
 
 ### 1. Prerequisites
 
@@ -56,8 +90,8 @@ posture_rl_project/
 ### 2. Clone the Repository
 
 ```bash
-git clone https://github.com/<your-username>/student_name_rl_summative.git
-cd student_name_rl_summative
+git clone https://github.com/ernesteNtezirizaza/erneste_ntezirizaza_rl_summative.git
+cd erneste_ntezirizaza_rl_summative
 ```
 
 ### 3. Create a Virtual Environment (recommended)
@@ -82,7 +116,7 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 Running the Project
+## Running the Project
 
 ### A — Random Action Demo (No Model Required)
 
@@ -172,7 +206,7 @@ Saves 10 figures to `plots/`:
 
 ---
 
-## 📊 Experiments Summary
+## Experiments Summary
 
 | Algorithm | Best Artifact                       | Best Run | Best Mean Reward ± Std | Mean of Mean Rewards | Key Result                                             |
 | --------- | ----------------------------------- | -------- | ---------------------- | -------------------- | ------------------------------------------------------ |
@@ -189,7 +223,7 @@ Saves 10 figures to `plots/`:
 
 ---
 
-## 🖼️ Visual Diagrams & Key Insights
+## Visual Diagrams & Key Insights
 
 ### 1. Environment Architecture
 
@@ -217,7 +251,7 @@ This summary figure reflects the CSV results: PPO is the strongest average perfo
 
 ---
 
-## 🤖 Environment Details
+## Environment Details
 
 ### Observation Space (8 continuous values)
 
@@ -250,7 +284,7 @@ This summary figure reflects the CSV results: PPO is the strongest average perfo
 
 ---
 
-## 📊 Reward Structure
+## Reward Structure
 
 | Event                                      | Reward |
 | ------------------------------------------ | ------ |
@@ -267,7 +301,7 @@ This summary figure reflects the CSV results: PPO is the strongest average perfo
 
 ---
 
-## 🌐 JSON API Export
+## JSON API Export
 
 The `--export-json` flag serialises episode trajectories as a structured JSON payload (`logs/api_export.json`), demonstrating how this RL agent can be integrated into a **web or mobile application backend**:
 
@@ -279,7 +313,7 @@ The output JSON contains per-step observations, actions, and rewards — ready t
 
 ---
 
-## 📈 Algorithm Summary (Best Runs)
+## Algorithm Summary (Best Runs)
 
 | Algorithm | Best Run | Best Mean Reward ± Std | Mean of Mean Rewards | Notes                                                    |
 | --------- | -------- | ---------------------- | -------------------- | -------------------------------------------------------- |
@@ -289,7 +323,7 @@ The output JSON contains per-step observations, actions, and rewards — ready t
 
 ---
 
-## ⚡ REINFORCE: Pure PyTorch Implementation
+## REINFORCE: Pure PyTorch Implementation
 
 REINFORCE is now implemented from scratch using pure PyTorch — **no Stable-Baselines3 wrapper, no actor-critic architecture, no shared value head.**
 
@@ -330,17 +364,6 @@ class PolicyNetwork(nn.Module):
 - **`train()`**: Main training loop with **per-episode logging** for visibility
 - **`save()`**: PyTorch checkpoint (.pt) containing policy state + training history
 
-### Hyperparameter Configurations (10 runs)
-
-| Run | LR   | γ    | Entropy Coef | Baseline | Network        |
-| --- | ---- | ---- | ------------ | -------- | -------------- |
-| 1   | 1e-3 | 0.99 | 0.01         | Yes      | [64, 64]       |
-| 2   | 5e-4 | 0.99 | 0.05         | Yes      | [128, 128]     |
-| ... | ...  | ...  | ...          | ...      | ...            |
-| 10  | 8e-4 | 0.98 | 0.03         | Yes      | [256, 128, 64] |
-
-Full grid: `REINFORCE_GRID` in `training/pg_training.py` (10 configurations)
-
 ### Training Outputs
 
 - **Best model**: `models/pg/best_reinforce_model.pt` (PyTorch checkpoint)
@@ -355,6 +378,64 @@ Full grid: `REINFORCE_GRID` in `training/pg_training.py` (10 configurations)
 3. **Gradient clipping** — Prevents unstable updates typical of high-variance policy gradients
 4. **Full transparency** — All components visible and customisable within ~200 lines of code
 
+## DQN: Stable-Baselines3 Implementation
+
+DQN is implemented with Stable-Baselines3 as the value-based baseline for the project. The training script applies the algorithm directly to `PostureMonitorEnv` with an MLP policy and a compact evaluation/logging loop.
+
+### Core Implementation
+
+**`training/dqn_training.py` — Key Components:**
+
+- **`HP_GRID`**: 10 hyperparameter combinations covering learning rate, gamma, replay buffer size, batch size, target-update `tau`, and exploration schedule
+- **`make_env()`**: Wraps `PostureMonitorEnv` in `Monitor` for episode tracking
+- **`DQN(...)`**: Uses `MlpPolicy` with `policy_kwargs=dict(net_arch=...)`
+- **`EvalCallback`**: Evaluates every 5,000 timesteps on a separate seeded environment
+- **`TimestepLoggingCallback`**: Prints step-level reward and episode return during training
+- **`model.learn(...)`**: Trains for `60,000` timesteps per run on CPU
+- **`model.save(...)`**: Stores each run as a `.zip` checkpoint, then copies the best run to `best_dqn_model.zip`
+
+### Training Outputs
+
+- **Best model**: `models/dqn/best_dqn_model.zip`
+- **Metadata**: `models/dqn/best_dqn_model.json`
+- **Results table**: `logs/dqn/dqn_hyperparameter_results.csv`
+- **Logs**: Per-run evaluation logs under `logs/dqn/run_*/`
+
+### Why DQN Here?
+
+1. **Discrete action fit** — The posture coaching task has a small discrete action space, which suits DQN well
+2. **Sample efficiency** — Replay buffer and target network updates help stabilise value learning
+3. **Comparable baseline** — Provides a strong off-policy benchmark against policy-gradient methods
+
+## PPO: Stable-Baselines3 Implementation
+
+PPO is implemented with Stable-Baselines3 as the clipped policy-gradient baseline. It uses separate actor and critic network branches with matched architectures and the standard PPO training loop.
+
+### Core Implementation
+
+**`training/pg_training.py` — PPO Components:**
+
+- **`PPO_GRID`**: 10 hyperparameter combinations covering learning rate, gamma, entropy coefficient, rollout length, batch size, epoch count, clip range, GAE lambda, and network size
+- **`make_env()`**: Wraps `PostureMonitorEnv` in `Monitor` for evaluation consistency
+- **`PPO(...)`**: Uses `MlpPolicy` with `policy_kwargs=dict(net_arch=dict(pi=..., vf=...))`
+- **`EvalCallback`**: Evaluates every 5,000 timesteps on a separate seeded environment
+- **`PPOTimestepLoggingCallback`**: Reports training progress at fixed timestep intervals
+- **`model.learn(...)`**: Trains for `60,000` timesteps per run on CPU
+- **`model.save(...)`**: Stores each run as a `.zip` checkpoint, then copies the best run to `best_ppo_model.zip`
+
+### Training Outputs
+
+- **Best model**: `models/pg/best_ppo_model.zip`
+- **Metadata**: `models/pg/best_ppo_model.json`
+- **Results table**: `logs/pg/ppo_results.csv`
+- **Logs**: Per-run evaluation logs under `logs/pg/ppo_run_*/`
+
+### Why PPO Here?
+
+1. **Stable policy updates** — Clipped objective reduces destructive policy jumps
+2. **Strong final performance** — In this project, PPO gave the best average score across runs
+3. **Good variance control** — GAE, entropy bonus, and separate actor/critic heads improve stability
+
 ### main.py Model Loading Update
 
 The model loader now correctly handles **three distinct model formats:**
@@ -367,9 +448,48 @@ The model loader now correctly handles **three distinct model formats:**
 
 Architecture is automatically inferred from the checkpoint metadata.
 
+## Hyperparameter Configurations (30 runs total)
+
+The table below combines the full REINFORCE, DQN, and PPO grids used in the project.
+
+| Algorithm | Run | LR   | γ    | Key Hyperparameters                                               | Network        |
+| --------- | --- | ---- | ---- | ----------------------------------------------------------------- | -------------- |
+| REINFORCE | 1   | 1e-3 | 0.99 | Ent=0.01; Baseline=Yes                                            | [64, 64]       |
+| REINFORCE | 2   | 5e-4 | 0.99 | Ent=0.05; Baseline=Yes                                            | [128, 128]     |
+| REINFORCE | 3   | 2e-4 | 0.95 | Ent=0.01; Baseline=No                                             | [64, 64]       |
+| REINFORCE | 4   | 1e-3 | 0.98 | Ent=0.10; Baseline=Yes                                            | [256, 128]     |
+| REINFORCE | 5   | 3e-4 | 0.99 | Ent=0.02; Baseline=Yes                                            | [128, 64]      |
+| REINFORCE | 6   | 7e-4 | 0.90 | Ent=0.00; Baseline=No                                             | [64, 64]       |
+| REINFORCE | 7   | 1e-4 | 0.99 | Ent=0.05; Baseline=Yes                                            | [256, 256]     |
+| REINFORCE | 8   | 5e-3 | 0.97 | Ent=0.02; Baseline=Yes                                            | [128, 128, 64] |
+| REINFORCE | 9   | 2e-4 | 0.99 | Ent=0.001; Baseline=No                                            | [512, 256]     |
+| REINFORCE | 10  | 8e-4 | 0.98 | Ent=0.03; Baseline=Yes                                            | [256, 128, 64] |
+| DQN       | 1   | 1e-3 | 0.99 | Buffer=10000; Batch=64; Tau=1.0; ε 1.00→0.05; Explo=0.20          | [64, 64]       |
+| DQN       | 2   | 5e-4 | 0.99 | Buffer=20000; Batch=128; Tau=0.9; ε 1.00→0.05; Explo=0.30         | [128, 128]     |
+| DQN       | 3   | 1e-4 | 0.95 | Buffer=10000; Batch=64; Tau=1.0; ε 1.00→0.02; Explo=0.40          | [64, 64]       |
+| DQN       | 4   | 1e-3 | 0.98 | Buffer=50000; Batch=256; Tau=0.5; ε 1.00→0.01; Explo=0.20         | [256, 128]     |
+| DQN       | 5   | 2e-4 | 0.99 | Buffer=30000; Batch=128; Tau=0.8; ε 0.80→0.05; Explo=0.50         | [128, 64]      |
+| DQN       | 6   | 5e-3 | 0.90 | Buffer=10000; Batch=32; Tau=1.0; ε 1.00→0.10; Explo=0.10          | [64, 64]       |
+| DQN       | 7   | 3e-4 | 0.99 | Buffer=20000; Batch=64; Tau=0.7; ε 1.00→0.05; Explo=0.30          | [256, 256]     |
+| DQN       | 8   | 1e-3 | 0.97 | Buffer=10000; Batch=128; Tau=0.9; ε 1.00→0.02; Explo=0.20         | [128, 128, 64] |
+| DQN       | 9   | 1e-4 | 0.99 | Buffer=50000; Batch=256; Tau=0.3; ε 1.00→0.01; Explo=0.60         | [512, 256]     |
+| DQN       | 10  | 7e-4 | 0.98 | Buffer=30000; Batch=128; Tau=0.6; ε 0.90→0.05; Explo=0.35         | [256, 128, 64] |
+| PPO       | 1   | 3e-4 | 0.99 | Ent=0.01; n_steps=512; Batch=64; Epochs=10; Clip=0.2; GAE=0.95    | [64, 64]       |
+| PPO       | 2   | 1e-4 | 0.99 | Ent=0.05; n_steps=1024; Batch=128; Epochs=5; Clip=0.2; GAE=0.95   | [128, 128]     |
+| PPO       | 3   | 5e-4 | 0.95 | Ent=0.01; n_steps=256; Batch=64; Epochs=10; Clip=0.1; GAE=0.90    | [64, 64]       |
+| PPO       | 4   | 3e-4 | 0.98 | Ent=0.10; n_steps=2048; Batch=256; Epochs=20; Clip=0.3; GAE=0.98  | [256, 128]     |
+| PPO       | 5   | 7e-4 | 0.99 | Ent=0.02; n_steps=512; Batch=128; Epochs=10; Clip=0.2; GAE=0.95   | [128, 64]      |
+| PPO       | 6   | 1e-3 | 0.90 | Ent=0.00; n_steps=128; Batch=32; Epochs=5; Clip=0.2; GAE=0.80     | [64, 64]       |
+| PPO       | 7   | 2e-4 | 0.99 | Ent=0.05; n_steps=1024; Batch=64; Epochs=15; Clip=0.15; GAE=0.95  | [256, 256]     |
+| PPO       | 8   | 5e-4 | 0.97 | Ent=0.02; n_steps=512; Batch=128; Epochs=10; Clip=0.25; GAE=0.92  | [128, 128, 64] |
+| PPO       | 9   | 1e-4 | 0.99 | Ent=0.001; n_steps=2048; Batch=256; Epochs=10; Clip=0.2; GAE=0.99 | [512, 256]     |
+| PPO       | 10  | 4e-4 | 0.98 | Ent=0.03; n_steps=1024; Batch=128; Epochs=12; Clip=0.2; GAE=0.95  | [256, 128, 64] |
+
+Full grids: `REINFORCE_GRID`, `HP_GRID`, and `PPO_GRID` in the training scripts.
+
 ---
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 **Pygame display error on headless server:**
 
@@ -385,6 +505,6 @@ Ensure you activated the virtual environment and ran `pip install -r requirement
 
 ---
 
-## 📄 License
+## License
 
 Academic use only — Summative Assignment submission.
