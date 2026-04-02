@@ -260,11 +260,17 @@ class PostureRenderer:
 
     # ── Gauges (fatigue + compliance) ────────────────────────────
     def _draw_gauges(self, state):
-        self._draw_arc_gauge(90,  580, state[6], "Fatigue",   DANGER)
-        self._draw_arc_gauge(200, 580, min(state[5]/120, 1), "Sit Time", WARN)
+        # Unified status panel for clean separation from the main scene
+        px, py, pw, ph = 16, 528, 260, 136
+        pygame.draw.rect(self.screen, PANEL, (px, py, pw, ph), border_radius=10)
+        pygame.draw.rect(self.screen, ACCENT, (px, py, pw, ph), width=1, border_radius=10)
+
+        # Gauges are placed in the lower half of the panel.
+        self._draw_arc_gauge(88,  626, state[6], "Fatigue", DANGER)
+        self._draw_arc_gauge(198, 626, min(state[5] / 120, 1), "Sit Time", WARN)
 
     def _draw_arc_gauge(self, cx, cy, value, label, color):
-        r  = 38
+        r  = 28
         start_a = math.pi
         end_a   = math.pi + value * math.pi
         # Background arc
@@ -288,10 +294,10 @@ class PostureRenderer:
             y2 = int(cy + r * math.sin(a2))
             pygame.draw.line(self.screen, color, (x1, y1), (x2, y2), 6)
         # Text
-        pct = self.font_md.render(f"{value*100:.0f}%", True, color)
-        self.screen.blit(pct, (cx - 18, cy - 14))
+        pct = self.font_sm.render(f"{value*100:.0f}%", True, color)
+        self.screen.blit(pct, (cx - 14, cy - 11))
         lbl = self.font_sm.render(label, True, TEXT_DIM)
-        self.screen.blit(lbl, (cx - 24, cy + 8))
+        self.screen.blit(lbl, (cx - 26, cy + 12))
 
     # ── Reward history chart ──────────────────────────────────────
     def _draw_reward_chart(self):
@@ -318,14 +324,14 @@ class PostureRenderer:
 
     # ── Step / reward info ────────────────────────────────────────
     def _draw_step_info(self, step, total_reward, last_reward):
-        info_y = 570
+        info_y = 540
         step_t = self.font_md.render(f"Step: {step:4d}", True, TEXT_MAIN)
         tot_t  = self.font_md.render(f"Total Reward: {total_reward:7.2f}", True, TEXT_MAIN)
         lr_col = GOOD if last_reward >= 0 else DANGER
         lr_t   = self.font_md.render(f"Last Δ: {last_reward:+.2f}", True, lr_col)
-        self.screen.blit(step_t, (20, info_y))
-        self.screen.blit(tot_t,  (20, info_y + 22))
-        self.screen.blit(lr_t,   (20, info_y + 44))
+        self.screen.blit(step_t, (26, info_y))
+        self.screen.blit(tot_t,  (26, info_y + 22))
+        self.screen.blit(lr_t,   (26, info_y + 44))
 
     # ── Cleanup ───────────────────────────────────────────────────
     def close(self):
