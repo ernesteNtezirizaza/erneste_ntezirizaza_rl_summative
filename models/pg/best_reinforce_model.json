@@ -1,0 +1,15 @@
+{
+  "run_id": 1,
+  "mean_reward": 247.30000000000004,
+  "model_path": "models/pg/best_reinforce_model.pt",
+  "hyperparameters": {
+    "learning_rate": 0.001,
+    "gamma": 0.99,
+    "entropy_coefficient": 0.01,
+    "use_baseline": true,
+    "network_architecture": [
+      64,
+      64
+    ]
+  }
+}

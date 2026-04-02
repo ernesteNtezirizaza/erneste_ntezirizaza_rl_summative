@@ -1,0 +1,19 @@
+{
+  "run_id": 9,
+  "mean_reward": 279.8,
+  "model_path": "models/dqn/best_dqn_model.zip",
+  "hyperparameters": {
+    "learning_rate": 0.0001,
+    "gamma": 0.99,
+    "buffer_size": 50000,
+    "batch_size": 256,
+    "tau": 0.3,
+    "exploration_fraction": 0.6,
+    "exploration_initial_eps": 1.0,
+    "exploration_final_eps": 0.01,
+    "network_architecture": [
+      512,
+      256
+    ]
+  }
+}

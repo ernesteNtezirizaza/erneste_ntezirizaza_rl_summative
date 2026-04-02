@@ -1,0 +1,17 @@
+{
+  "run_id": 7,
+  "mean_reward": 7.299999999999997,
+  "std_reward": 8.256815366713731,
+  "hyperparameters": {
+    "run": 7,
+    "lr": 0.0001,
+    "gamma": 0.99,
+    "ent": 0.05,
+    "baseline": true,
+    "net": [
+      256,
+      256
+    ]
+  },
+  "history_path": "logs/pg/reinforce_run_7_history.csv"
+}
