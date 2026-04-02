@@ -14,6 +14,7 @@
 - [Running the Project](#running-the-project)
 - [Experiments Summary](#experiments-summary)
 - [Visual Diagrams & Key Insights](#visual-diagrams--key-insights)
+- [Discussion & Analysis](#discussion--analysis)
 - [Environment Details](#environment-details)
 - [Reward Structure](#reward-structure)
 - [JSON API Export](#json-api-export)
@@ -227,7 +228,7 @@ Saves 10 figures to `plots/`:
 
 ### 1. Environment Architecture
 
-![Environment Architecture](plots/01_env_architecture.png)
+![Updated Environment Architecture](plots/01_env_architecture.png?raw=1)
 
 The architecture diagram shows the full RL loop: observations flow into the agent, the agent selects a posture-coaching action, the environment applies the effect, and the reward signal closes the loop.
 
@@ -248,6 +249,69 @@ The reward plot highlights the asymmetry in the design: corrective actions are r
 ![Algorithm Comparison](plots/10_algorithm_comparison.png)
 
 This summary figure reflects the CSV results: PPO is the strongest average performer, DQN delivered the best single run, and REINFORCE remains the most variance-sensitive.
+
+## Discussion & Analysis
+
+This section connects the visuals to concrete learning behavior (stability, exploration/exploitation balance, and convergence).
+
+### 1. Cumulative Reward Curves (All Methods)
+
+Figure: `plots/04_training_curves.png`
+
+- All three methods show upward learning trends, confirming that the environment reward signal is learnable.
+- PPO achieves the most consistent high plateau over the final training window, which aligns with its best mean-of-means score (270.78 across 10 runs).
+- DQN improves quickly in early timesteps (strong sample efficiency), but the spread across runs is wider than PPO (best run 279.80, yet mean-of-means 147.56).
+- REINFORCE reaches competitive peaks in some runs but exhibits the largest instability across the sweep, reflected by lower aggregate mean-of-means (137.31).
+
+### 2. DQN Objective Curves
+
+Figure: `plots/08_dqn_objective.png`
+
+- TD loss decreases over training, indicating Bellman residual reduction and improving value consistency.
+- Q-value estimates rise while exploration rate $\epsilon$ decays, showing a standard shift from exploration to exploitation.
+- The best DQN run reaches 279.80 ± 4.35, but non-best runs vary significantly (for example run 2: 249.95 ± 69.60), indicating sensitivity to hyperparameters.
+
+### 3. Policy Entropy Curves (PG Methods)
+
+Figure: `plots/07_entropy_curves.png`
+
+- Entropy starts high and declines over time, which is expected as policies become more confident.
+- This demonstrates healthy exploration/exploitation transition: broad early action sampling, then sharper action preferences near convergence.
+- For REINFORCE, per-episode entropy logs confirm this collapse toward deterministic behavior (run-1 entropy mean 0.0143 with final entropy near 0).
+
+### 4. Convergence Comparison
+
+Figure: `plots/06_convergence.png`
+
+- PPO converges fastest and sustains high reward more reliably in the final phase.
+- DQN converges more gradually but remains competitive in best-run performance.
+- REINFORCE converges slower and with larger oscillations, consistent with higher-variance Monte-Carlo gradient estimates.
+- The convergence ordering in the plot is consistent with aggregate performance: PPO > DQN > REINFORCE (by mean-of-means).
+
+### 5. Hyperparameter Sensitivity
+
+Figure: `plots/05_hp_heatmap.png`
+
+- Performance is not uniform across $(\text{LR}, \gamma)$ settings; there are clear high-performing regions.
+- DQN shows sharper sensitivity, where small changes in exploration schedule and buffer/batch settings can produce large return differences.
+- PPO displays broader robust regions, which helps explain stronger average performance across 10 runs.
+
+### 6. Generalization Across Unseen Seeds
+
+Figure: `plots/09_generalisation.png`
+
+- PPO maintains the highest and most stable mean reward over unseen seeds, supporting stronger policy robustness.
+- DQN generalizes reasonably but with wider spread than PPO.
+- REINFORCE exhibits the widest variability under seed shift, reinforcing the variance findings from training and entropy behavior.
+
+### 7. Final Comparative Interpretation
+
+Figure: `plots/10_algorithm_comparison.png`
+
+- Best single run: DQN (279.80 ± 4.35).
+- Best average across full sweep: PPO (270.78 mean-of-means).
+- REINFORCE achieved its top score in multiple runs (247.30), but with weaker overall consistency.
+- Practical conclusion for deployment: PPO is the strongest default policy due to stability + robust cross-run behavior; DQN is a strong alternative when aggressively tuned; REINFORCE is most valuable for algorithmic transparency and educational interpretability.
 
 ---
 
