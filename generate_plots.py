@@ -39,15 +39,29 @@ C_DARK  = "#1a1a2e"
 # 1. ENVIRONMENT ARCHITECTURE DIAGRAM (REDESIGNED)
 # ══════════════════════════════════════════════════════════════════
 def plot_env_architecture():
-    fig = plt.figure(figsize=(18, 10), constrained_layout=True)
+    fig = plt.figure(figsize=(20, 11))
     ax = fig.add_subplot(111)
-    ax.set_xlim(0, 18)
-    ax.set_ylim(0, 10)
+    ax.set_xlim(0, 20)
+    ax.set_ylim(0, 11)
     ax.axis("off")
     ax.set_facecolor(C_BG)
     fig.patch.set_facecolor(C_BG)
 
-    def box(x, y, w, h, title, subtitle="", fc="#ffffff", ec="#4a90d9", title_fs=14, body=None):
+    def box(
+        x,
+        y,
+        w,
+        h,
+        title,
+        subtitle="",
+        fc="#ffffff",
+        ec="#4a90d9",
+        title_fs=14,
+        body=None,
+        row_step=0.56,
+        body_fs=10.8,
+        body_top_pad=1.35,
+    ):
         shadow = FancyBboxPatch((x + 0.08, y - 0.08), w, h, boxstyle="round,pad=0.18",
                                 facecolor="#000000", edgecolor="none", alpha=0.08)
         ax.add_patch(shadow)
@@ -58,11 +72,18 @@ def plot_env_architecture():
                 fontsize=title_fs, fontweight="bold", color=C_DARK)
         if subtitle:
             ax.text(x + w / 2, y + h - 0.78, subtitle, ha="center", va="top",
-                    fontsize=8.5, color="#666", style="italic")
+                    fontsize=9.4, color="#666", style="italic")
         if body:
             for i, line in enumerate(body):
-                ax.text(x + 0.28, y + h - 1.25 - 0.46 * i, f"• {line}",
-                        ha="left", va="top", fontsize=8.4, color="#2a2a4a", family="monospace")
+                ax.text(
+                    x + 0.36,
+                    y + h - body_top_pad - row_step * i,
+                    f"• {line}",
+                    ha="left",
+                    va="top",
+                    fontsize=body_fs,
+                    color="#2a2a4a",
+                )
 
     def arrow(x1, y1, x2, y2, label, color, curve=0.0):
         ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
@@ -70,13 +91,13 @@ def plot_env_architecture():
                                     connectionstyle=f"arc3,rad={curve}"))
         mx = (x1 + x2) / 2
         my = (y1 + y2) / 2
-        ax.text(mx, my + 0.18, label, ha="center", va="center", fontsize=9,
+        ax.text(mx, my + 0.18, label, ha="center", va="center", fontsize=10.2,
                 fontweight="bold", color=color,
                 bbox=dict(boxstyle="round,pad=0.22", facecolor="white", edgecolor=color, linewidth=1))
 
-    ax.text(9, 9.55, "PostureMonitorEnv — System Architecture", ha="center",
-            fontsize=18, fontweight="bold", color=C_DARK)
-    ax.text(9, 9.08, "Reinforcement learning loop for posture coaching", ha="center",
+    ax.text(10, 10.45, "PostureMonitorEnv — System Architecture", ha="center",
+            fontsize=22, fontweight="bold", color=C_DARK)
+    ax.text(10, 9.95, "Reinforcement learning loop for posture coaching", ha="center",
             fontsize=10.5, color="#666", style="italic")
 
     obs_body = [
@@ -97,7 +118,6 @@ def plot_env_architecture():
         "Applies chosen action",
         "Updates posture state",
         "Computes reward signal",
-        "Ends episode on fatigue or max steps",
     ]
     reward_body = [
         "+2 posture corrected",
@@ -107,31 +127,43 @@ def plot_env_architecture():
         "-2 fatigue peak",
     ]
 
-    box(0.4, 2.1, 4.1, 5.8, "OBSERVATION SPACE", "8-dimensional state vector",
-        fc="#eaf3ff", ec=C_DQN, body=obs_body)
-    box(5.85, 6.95, 6.3, 1.45, "RL AGENT", "Policy π(a|s)",
-        fc="#fff3de", ec="#e07b39", title_fs=15)
-    box(5.85, 3.4, 6.3, 2.35, "ENVIRONMENT", "PostureMonitorEnv",
-        fc="#fff0f0", ec="#d94a4a", body=env_body)
-    box(12.7, 2.1, 4.8, 5.8, "ACTION SPACE", "Discrete action set",
-        fc="#ebfbef", ec=C_PPO, body=action_body)
-    box(5.95, 1.2, 6.1, 1.6, "REWARD SIGNAL", "Immediate feedback from environment",
-        fc="#f3ecff", ec="#7b4ae0", body=reward_body)
+    box(0.5, 2.15, 4.85, 6.55, "OBSERVATION SPACE", "8-dimensional state vector",
+        fc="#eaf3ff", ec=C_DQN, body=obs_body, row_step=0.70, body_fs=11)
+    box(6.3, 7.4, 7.2, 1.7, "RL AGENT", "Policy π(a|s)",
+        fc="#fff3de", ec="#e07b39", title_fs=19)
+    box(6.3, 5.00, 7.2, 1.80, "ENVIRONMENT", "PostureMonitorEnv",
+        fc="#fff0f0", ec="#d94a4a", body=env_body, row_step=0.46, body_fs=11, body_top_pad=1.18)
+    box(14.25, 2.15, 4.95, 6.55, "ACTION SPACE", "Discrete action set",
+        fc="#ebfbef", ec=C_PPO, body=action_body, row_step=0.58, body_fs=10.8)
+    box(
+        6.3,
+        1.35,
+        7.2,
+        2.75,
+        "REWARD SIGNAL",
+        "Immediate feedback from environment",
+        fc="#f3ecff",
+        ec="#7b4ae0",
+        body=reward_body,
+        row_step=0.43,
+        body_fs=10.6,
+        body_top_pad=1.30,
+    )
 
-    term = FancyBboxPatch((1.1, 0.18), 15.8, 0.78, boxstyle="round,pad=0.14",
+    term = FancyBboxPatch((1.3, 0.05), 17.4, 0.64, boxstyle="round,pad=0.10",
                           facecolor="#ffe9e9", edgecolor="#d94a4a", linewidth=2)
     ax.add_patch(term)
-    ax.text(9, 0.67, "Terminal condition: fatigue level ≥ 1.0 or total steps ≥ 200",
-            ha="center", va="center", fontsize=10, fontweight="bold",
-            color="#8a2a2a", family="monospace")
+    ax.text(10, 0.37, "Terminal condition: fatigue level ≥ 1.0 or total steps ≥ 200",
+            ha="center", va="center", fontsize=10.8, fontweight="bold",
+            color="#8a2a2a")
 
     # Main flow
-    arrow(4.5, 5.0, 5.85, 7.35, "state sₜ", C_DQN, curve=0.08)
-    arrow(12.15, 7.35, 12.7, 5.85, "action aₜ", C_PPO, curve=-0.08)
-    arrow(8.0, 3.4, 8.0, 2.8, "reward rₜ", "#7b4ae0", curve=0.0)
-    arrow(6.65, 1.95, 4.5, 3.95, "next state sₜ₊₁", C_DQN, curve=-0.12)
+    arrow(5.35, 5.1, 6.3, 7.8, "state sₜ", C_DQN, curve=0.10)
+    arrow(13.5, 7.8, 14.25, 5.8, "action aₜ", C_PPO, curve=-0.10)
+    arrow(9.9, 5.00, 9.9, 4.22, "reward rₜ", "#7b4ae0", curve=0.0)
+    arrow(7.10, 2.85, 5.30, 4.90, "next state sₜ₊₁", C_DQN, curve=-0.12)
 
-    ax.text(9, 6.75, "DQN | REINFORCE | PPO", ha="center", fontsize=10.5,
+    ax.text(10, 7.15, "DQN | REINFORCE | PPO", ha="center", fontsize=12,
             fontweight="bold", color="#333",
             bbox=dict(boxstyle="round,pad=0.28", facecolor="white", edgecolor="#e07b39", linewidth=1.2))
 
