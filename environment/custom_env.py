@@ -1,292 +1,313 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+"""
+PostureMonitorEnv - Custom Gymnasium Environment
+Real-Time Posture Monitoring and Correction System for Office Workers
+Capstone Project RL Environment
+"""
 
 import gymnasium as gym
-import numpy as np
 from gymnasium import spaces
+import numpy as np
+import random
+
+# ─────────────────────────────────────────────
+# CONSTANTS
+# ─────────────────────────────────────────────
+# Posture state indices
+HEAD_TILT       = 0   # degrees from neutral (-30 to +30)
+NECK_ANGLE      = 1   # degrees (0 = straight, negative = forward)
+SHOULDER_DROP   = 2   # asymmetry score (0-10)
+BACK_CURVATURE  = 3   # lumbar angle (0 = upright, 30 = slouched)
+SCREEN_DISTANCE = 4   # cm (40-90 cm ideal range: 50-70)
+SITTING_DURATION= 5   # minutes (0-120)
+FATIGUE_LEVEL   = 6   # 0-1 float (increases with time & bad posture)
+ALERT_IGNORED   = 7   # count of consecutive ignored alerts (0-5)
+
+NUM_OBS = 8
+
+# Actions
+ACTION_NOTHING         = 0
+ACTION_GENTLE_ALERT    = 1
+ACTION_URGENT_ALERT    = 2
+ACTION_BREAK_REMINDER  = 3
+ACTION_STRETCH_PROMPT  = 4
+ACTION_SCREEN_ADJUST   = 5
+NUM_ACTIONS = 6
+
+# Posture thresholds
+HEAD_TILT_THRESHOLD   = 15.0   # degrees — warn beyond this
+NECK_THRESHOLD        = -15.0  # degrees — warn if below
+SHOULDER_THRESHOLD    = 5.0    # asymmetry units
+BACK_THRESHOLD        = 20.0   # degrees slouch
+SCREEN_MIN            = 50.0   # cm
+SCREEN_MAX            = 70.0   # cm
+SIT_THRESHOLD         = 45.0   # minutes before break needed
+
+MAX_STEPS             = 200
+FATIGUE_INCREMENT     = 0.005
+FATIGUE_BAD_POSTURE   = 0.015
+MAX_IGNORED_ALERTS    = 5
 
 
-@dataclass
-class ErgonomicThresholds:
-    critical_posture: float = 0.18
-    high_fatigue: float = 0.75
-    break_need: float = 0.55
+class PostureMonitorEnv(gym.Env):
+    """
+    PostureMonitorEnv
+    =================
+    Simulates an office worker's posture over a work session.
+    The RL agent acts as a smart posture coaching system:
+    - It observes biomechanical posture metrics
+    - Decides when and how to intervene (alert, remind, adjust)
+    - Learns to balance correction effectiveness vs. alert fatigue
 
+    Observation Space (8 continuous values):
+        [head_tilt, neck_angle, shoulder_drop, back_curvature,
+         screen_distance, sitting_duration, fatigue_level, alert_ignored_count]
 
-class OfficePostureEnv(gym.Env):
-    """Mission-based posture monitoring environment for office workers.
+    Action Space (6 discrete actions):
+        0 - Do Nothing
+        1 - Send Gentle Alert
+        2 - Send Urgent Alert
+        3 - Send Break Reminder
+        4 - Prompt Stretch Exercise
+        5 - Suggest Screen Distance Adjustment
 
-    Observation vector (8 floats):
-    0 neck_quality            [0, 1] higher is better
-    1 shoulder_quality        [0, 1]
-    2 spine_quality           [0, 1]
-    3 fatigue                 [0, 1] lower is better
-    4 desk_time_norm          [0, 1]
-    5 break_pressure          [0, 1]
-    6 recent_improvement      [-1, 1]
-    7 last_action_norm        [0, 1]
-
-    Action space (8 discrete actions):
-    0 align_neck
-    1 relax_shoulders
-    2 lumbar_reset
-    3 monitor_prompt
-    4 micro_stretch_break
-    5 short_walk_break
-    6 breathing_reset
-    7 ignore_prompt
+    Reward Structure:
+        +2.0  : Worker corrects posture after intervention
+        +1.0  : Posture already good, no intervention needed
+        -1.0  : Alert ignored (alert fatigue)
+        -0.5  : Unnecessary alert when posture is fine
+        -2.0  : Worker reaches dangerous fatigue level
+        +0.3  : Sustained good posture bonus (every 10 steps)
     """
 
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
 
-    def __init__(
-        self,
-        max_steps: int = 480,
-        render_mode: Optional[str] = None,
-        seed: Optional[int] = None,
-    ) -> None:
+    def __init__(self, render_mode=None):
         super().__init__()
-        self.max_steps = max_steps
         self.render_mode = render_mode
-        self.thresholds = ErgonomicThresholds()
 
-        self.action_space = spaces.Discrete(8)
-        self.observation_space = spaces.Box(
-            low=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0], dtype=np.float32),
-            high=np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32),
-            dtype=np.float32,
-        )
+        # ── Observation Space ──────────────────────────────────────
+        low  = np.array([-30, -45,  0,  0, 30,   0, 0, 0], dtype=np.float32)
+        high = np.array([ 30,  10, 10, 45, 90, 120, 1, 5], dtype=np.float32)
+        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
 
-        self._rng = np.random.default_rng(seed)
+        # ── Action Space ───────────────────────────────────────────
+        self.action_space = spaces.Discrete(NUM_ACTIONS)
+
+        # Internal state
+        self._state    = None
         self._step_count = 0
-        self._quality = np.zeros(3, dtype=np.float32)
-        self._fatigue = 0.0
-        self._recent_improvement = 0.0
-        self._break_pressure = 0.0
-        self._last_action = 0
+        self._good_posture_streak = 0
+        self._total_reward = 0.0
+        self._history  = []           # for rendering / logging
+        self._correction_prob = 0.7   # probability worker corrects on gentle alert
+        self._worker_compliance = random.uniform(0.5, 1.0)  # per-episode trait
 
-        self._window = None
-        self._clock = None
+        # Renderer (lazy-loaded)
+        self._renderer = None
 
-    def _get_obs(self) -> np.ndarray:
-        desk_time_norm = min(1.0, self._step_count / float(self.max_steps))
-        obs = np.array(
-            [
-                self._quality[0],
-                self._quality[1],
-                self._quality[2],
-                self._fatigue,
-                desk_time_norm,
-                self._break_pressure,
-                self._recent_improvement,
-                self._last_action / 7.0,
-            ],
-            dtype=np.float32,
-        )
-        return obs
-
-    def _ergonomic_score(self) -> float:
-        quality_score = float(np.mean(self._quality))
-        fatigue_penalty = 0.35 * self._fatigue
-        return float(np.clip(quality_score - fatigue_penalty, 0.0, 1.0))
-
-    def _action_effect(self, action: int) -> Tuple[np.ndarray, float]:
-        quality_delta = np.zeros(3, dtype=np.float32)
-        fatigue_delta = 0.0
-
-        if action == 0:
-            quality_delta = np.array([0.08, 0.01, 0.0], dtype=np.float32)
-        elif action == 1:
-            quality_delta = np.array([0.01, 0.08, 0.01], dtype=np.float32)
-        elif action == 2:
-            quality_delta = np.array([0.0, 0.02, 0.09], dtype=np.float32)
-        elif action == 3:
-            quality_delta = np.array([0.03, 0.03, 0.03], dtype=np.float32)
-        elif action == 4:
-            quality_delta = np.array([0.05, 0.05, 0.06], dtype=np.float32)
-            fatigue_delta = -0.09
-        elif action == 5:
-            quality_delta = np.array([0.04, 0.05, 0.04], dtype=np.float32)
-            fatigue_delta = -0.12
-        elif action == 6:
-            quality_delta = np.array([0.03, 0.02, 0.03], dtype=np.float32)
-            fatigue_delta = -0.07
-        elif action == 7:
-            quality_delta = np.array([-0.02, -0.02, -0.03], dtype=np.float32)
-            fatigue_delta = 0.02
-
-        return quality_delta, fatigue_delta
-
-    def _drift(self) -> Tuple[np.ndarray, float]:
-        # Natural posture deterioration becomes stronger as fatigue rises.
-        base_drift = 0.012 + 0.016 * self._fatigue
-        random_drift = self._rng.normal(loc=0.0, scale=0.004, size=3).astype(np.float32)
-        quality_drift = np.full(3, -base_drift, dtype=np.float32) + random_drift
-        fatigue_drift = 0.005 + 0.006 * (1.0 - float(np.mean(self._quality)))
-        return quality_drift, fatigue_drift
-
-    def reset(
-        self, seed: Optional[int] = None, options: Optional[Dict[str, Any]] = None
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    # ──────────────────────────────────────────────────────────────
+    # RESET
+    # ──────────────────────────────────────────────────────────────
+    def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        if seed is not None:
-            self._rng = np.random.default_rng(seed)
+        rng = self.np_random
 
-        self._step_count = 0
-        self._quality = self._rng.uniform(0.45, 0.75, size=3).astype(np.float32)
-        self._fatigue = float(self._rng.uniform(0.05, 0.18))
-        self._recent_improvement = 0.0
-        self._break_pressure = 0.0
-        self._last_action = 3
+        self._state = np.array([
+            rng.uniform(-10, 10),    # head tilt  — near neutral at session start
+            rng.uniform(-10,  5),    # neck angle
+            rng.uniform(  0,  3),    # shoulder drop
+            rng.uniform(  0, 10),    # back curvature — mostly upright
+            rng.uniform( 55, 65),    # screen distance — within ideal range
+            0.0,                      # sitting duration (fresh session)
+            0.0,                      # fatigue
+            0.0,                      # alert ignored count
+        ], dtype=np.float32)
 
-        obs = self._get_obs()
-        info = {
-            "ergonomic_score": self._ergonomic_score(),
-            "mission": "Maintain healthy posture during office shift",
-        }
-        return obs, info
+        self._step_count          = 0
+        self._good_posture_streak = 0
+        self._total_reward        = 0.0
+        self._history             = []
+        self._worker_compliance   = rng.uniform(0.5, 1.0)
 
-    def step(self, action: int):
-        assert self.action_space.contains(action), "Invalid action"
+        info = {"worker_compliance": float(self._worker_compliance)}
+        return self._state.copy(), info
 
-        prev_mean_quality = float(np.mean(self._quality))
-        prev_score = self._ergonomic_score()
+    # ──────────────────────────────────────────────────────────────
+    # STEP
+    # ──────────────────────────────────────────────────────────────
+    def step(self, action):
+        assert self.action_space.contains(action), f"Invalid action: {action}"
 
-        drift_q, drift_f = self._drift()
-        act_q, act_f = self._action_effect(action)
+        s = self._state
+        reward       = 0.0
+        terminated   = False
+        truncated    = False
 
-        self._quality = np.clip(self._quality + drift_q + act_q, 0.0, 1.0)
-        self._fatigue = float(np.clip(self._fatigue + drift_f + act_f, 0.0, 1.0))
+        posture_bad  = self._is_posture_bad(s)
+        fatigue_high = s[FATIGUE_LEVEL] > 0.75
 
-        self._step_count += 1
-        self._last_action = int(action)
-
-        mean_quality = float(np.mean(self._quality))
-        improvement = mean_quality - prev_mean_quality
-        self._recent_improvement = float(np.clip(0.9 * self._recent_improvement + improvement, -1.0, 1.0))
-
-        desk_time_norm = min(1.0, self._step_count / float(self.max_steps))
-        self._break_pressure = float(np.clip(0.6 * self._fatigue + 0.4 * desk_time_norm, 0.0, 1.0))
-
-        reward = 4.0 * improvement
-        reward += 1.4 * (self._ergonomic_score() - prev_score)
-        reward -= 0.08 * self._fatigue
-
-        if action in (4, 5) and self._fatigue > self.thresholds.break_need:
-            reward += 0.25
-        if action == 7 and self._break_pressure > self.thresholds.break_need:
-            reward -= 0.35
-
-        terminated = False
-        truncated = False
-
-        if mean_quality < self.thresholds.critical_posture:
-            terminated = True
-            reward -= 2.0
-        elif self._step_count >= self.max_steps:
-            terminated = True
-            reward += 1.5 * self._ergonomic_score()
-
-        obs = self._get_obs()
-        info = {
-            "ergonomic_score": self._ergonomic_score(),
-            "mean_quality": mean_quality,
-            "fatigue": self._fatigue,
-            "break_pressure": self._break_pressure,
-            "step": self._step_count,
-        }
-
-        return obs, float(reward), terminated, truncated, info
-
-    def render(self):
-        if self.render_mode is None:
-            return None
-
-        import pygame
-
-        width, height = 900, 560
-        if self._window is None:
-            pygame.init()
-            if self.render_mode == "human":
-                pygame.display.init()
-                self._window = pygame.display.set_mode((width, height))
+        # ── Apply action effects ───────────────────────────────────
+        if action == ACTION_NOTHING:
+            if not posture_bad:
+                reward += 1.0   # correct decision: posture fine, no action needed
+                self._good_posture_streak += 1
             else:
-                self._window = pygame.Surface((width, height))
-            self._clock = pygame.time.Clock()
+                reward -= 0.5   # missed a correction opportunity
 
-        canvas = pygame.Surface((width, height))
-        canvas.fill((240, 244, 246))
+        elif action == ACTION_GENTLE_ALERT:
+            if posture_bad:
+                if self.np_random.random() < self._worker_compliance * 0.8:
+                    self._correct_posture_gradually(s)
+                    reward += 2.0
+                    s[ALERT_IGNORED] = max(0, s[ALERT_IGNORED] - 1)
+                else:
+                    s[ALERT_IGNORED] = min(MAX_IGNORED_ALERTS, s[ALERT_IGNORED] + 1)
+                    reward -= 1.0
+            else:
+                reward -= 0.5   # unnecessary alert
 
-        def gauge(x: int, y: int, value: float, label: str, invert: bool = False) -> None:
-            bar_w, bar_h = 220, 22
-            pygame.draw.rect(canvas, (210, 214, 218), pygame.Rect(x, y, bar_w, bar_h), border_radius=8)
-            draw_value = (1.0 - value) if invert else value
-            fill = int(bar_w * np.clip(draw_value, 0.0, 1.0))
-            color = (
-                int(220 * (1 - draw_value)),
-                int(170 * draw_value + 50),
-                80,
-            )
-            pygame.draw.rect(canvas, color, pygame.Rect(x, y, fill, bar_h), border_radius=8)
+        elif action == ACTION_URGENT_ALERT:
+            if posture_bad or fatigue_high:
+                if self.np_random.random() < self._worker_compliance * 0.9:
+                    self._correct_posture_fully(s)
+                    reward += 2.5
+                    s[ALERT_IGNORED] = 0
+                else:
+                    s[ALERT_IGNORED] = min(MAX_IGNORED_ALERTS, s[ALERT_IGNORED] + 2)
+                    reward -= 1.5
+            else:
+                reward -= 1.0   # crying wolf
 
-            font = pygame.font.SysFont("Segoe UI", 20)
-            txt = font.render(f"{label}: {value:.2f}", True, (20, 30, 40))
-            canvas.blit(txt, (x, y - 28))
+        elif action == ACTION_BREAK_REMINDER:
+            if s[SITTING_DURATION] >= SIT_THRESHOLD:
+                s[SITTING_DURATION] = 0.0     # worker takes break
+                s[FATIGUE_LEVEL]    = max(0, s[FATIGUE_LEVEL] - 0.2)
+                reward += 2.0
+            else:
+                reward -= 0.3   # premature break reminder
 
-        gauge(50, 80, float(self._quality[0]), "Neck Quality")
-        gauge(50, 160, float(self._quality[1]), "Shoulder Quality")
-        gauge(50, 240, float(self._quality[2]), "Spine Quality")
-        gauge(50, 320, float(self._fatigue), "Fatigue", invert=True)
-        gauge(50, 400, float(self._break_pressure), "Break Pressure", invert=True)
+        elif action == ACTION_STRETCH_PROMPT:
+            if fatigue_high or s[SITTING_DURATION] > 30:
+                s[FATIGUE_LEVEL]    = max(0, s[FATIGUE_LEVEL] - 0.15)
+                s[SHOULDER_DROP]    = max(0, s[SHOULDER_DROP] - 2)
+                s[BACK_CURVATURE]   = max(0, s[BACK_CURVATURE] - 3)
+                reward += 1.5
+            else:
+                reward -= 0.2
 
-        center_x, center_y = 620, 290
-        quality = float(np.mean(self._quality))
-        bend = int((1.0 - quality) * 50)
+        elif action == ACTION_SCREEN_ADJUST:
+            dist = s[SCREEN_DISTANCE]
+            if dist < SCREEN_MIN or dist > SCREEN_MAX:
+                s[SCREEN_DISTANCE] = np.clip(dist + np.sign(60 - dist) * 5, 30, 90)
+                reward += 1.0
+            else:
+                reward -= 0.3   # unnecessary adjustment
 
-        skin = (46, 62, 80)
-        pygame.draw.circle(canvas, skin, (center_x, center_y - 120), 25, width=3)
-        pygame.draw.line(canvas, skin, (center_x, center_y - 95), (center_x + bend, center_y - 20), width=6)
-        pygame.draw.line(canvas, skin, (center_x + bend, center_y - 20), (center_x + bend - 35, center_y + 80), width=6)
-        pygame.draw.line(canvas, skin, (center_x + bend, center_y - 20), (center_x + bend + 35, center_y + 80), width=6)
-        pygame.draw.line(canvas, skin, (center_x + bend - 5, center_y + 5), (center_x + bend - 40, center_y + 45), width=6)
-        pygame.draw.line(canvas, skin, (center_x + bend - 5, center_y + 5), (center_x + bend + 40, center_y + 45), width=6)
+        # ── Environment dynamics (natural posture degradation) ────
+        self._degrade_posture(s)
 
-        score_font = pygame.font.SysFont("Segoe UI", 28, bold=True)
-        score = self._ergonomic_score()
-        score_txt = score_font.render(f"Ergonomic Score: {score:.2f}", True, (12, 40, 70))
-        canvas.blit(score_txt, (500, 45))
+        # ── Sustained good posture bonus ──────────────────────────
+        if self._good_posture_streak > 0 and self._good_posture_streak % 10 == 0:
+            reward += 0.3
 
-        action_names = [
-            "align_neck",
-            "relax_shoulders",
-            "lumbar_reset",
-            "monitor_prompt",
-            "micro_stretch_break",
-            "short_walk_break",
-            "breathing_reset",
-            "ignore_prompt",
-        ]
-        action_txt = pygame.font.SysFont("Segoe UI", 24).render(
-            f"Last Action: {action_names[self._last_action]}", True, (30, 30, 30)
-        )
-        canvas.blit(action_txt, (470, 500))
+        # ── Danger zone penalty ───────────────────────────────────
+        if s[FATIGUE_LEVEL] >= 1.0:
+            reward   -= 2.0
+            terminated = True   # worker has reached MSD risk threshold
+
+        if s[ALERT_IGNORED] >= MAX_IGNORED_ALERTS:
+            reward -= 1.0       # alert saturation — agent over-alerted
+
+        # ── Step bookkeeping ──────────────────────────────────────
+        self._step_count += 1
+        self._total_reward += reward
+        self._history.append({
+            "step":   self._step_count,
+            "action": action,
+            "state":  s.copy(),
+            "reward": reward,
+        })
+
+        if self._step_count >= MAX_STEPS:
+            truncated = True
+
+        obs  = np.clip(s, self.observation_space.low, self.observation_space.high)
+        info = {
+            "posture_bad":   bool(posture_bad),
+            "total_reward":  float(self._total_reward),
+            "step":          self._step_count,
+            "fatigue":       float(s[FATIGUE_LEVEL]),
+        }
 
         if self.render_mode == "human":
-            self._window.blit(canvas, canvas.get_rect())
-            pygame.event.pump()
-            pygame.display.update()
-            self._clock.tick(self.metadata["render_fps"])
-            return None
+            self.render()
 
-        return np.transpose(np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2))
+        return obs.astype(np.float32), float(reward), terminated, truncated, info
 
-    def close(self) -> None:
-        if self._window is not None:
-            import pygame
+    # ──────────────────────────────────────────────────────────────
+    # HELPERS
+    # ──────────────────────────────────────────────────────────────
+    def _is_posture_bad(self, s):
+        return (
+            abs(s[HEAD_TILT])     > HEAD_TILT_THRESHOLD  or
+            s[NECK_ANGLE]         < NECK_THRESHOLD        or
+            s[SHOULDER_DROP]      > SHOULDER_THRESHOLD    or
+            s[BACK_CURVATURE]     > BACK_THRESHOLD        or
+            s[SCREEN_DISTANCE]    < SCREEN_MIN            or
+            s[SCREEN_DISTANCE]    > SCREEN_MAX            or
+            s[SITTING_DURATION]   > SIT_THRESHOLD
+        )
 
-            pygame.display.quit()
-            pygame.quit()
-            self._window = None
-            self._clock = None
+    def _correct_posture_gradually(self, s):
+        """Simulate worker partially correcting posture."""
+        s[HEAD_TILT]      *= 0.5
+        s[NECK_ANGLE]      = min(s[NECK_ANGLE] + 5, 0)
+        s[SHOULDER_DROP]   = max(0, s[SHOULDER_DROP] - 1)
+        s[BACK_CURVATURE]  = max(0, s[BACK_CURVATURE] - 5)
+
+    def _correct_posture_fully(self, s):
+        """Simulate worker fully correcting posture after urgent alert."""
+        s[HEAD_TILT]      = self.np_random.uniform(-5, 5)
+        s[NECK_ANGLE]     = self.np_random.uniform(-5, 0)
+        s[SHOULDER_DROP]  = self.np_random.uniform(0, 2)
+        s[BACK_CURVATURE] = self.np_random.uniform(0, 8)
+
+    def _degrade_posture(self, s):
+        """Natural posture degradation over time."""
+        rng = self.np_random
+        s[SITTING_DURATION] = min(120, s[SITTING_DURATION] + 1.0)
+        s[FATIGUE_LEVEL]    += FATIGUE_INCREMENT
+
+        if self._is_posture_bad(s):
+            s[FATIGUE_LEVEL] += FATIGUE_BAD_POSTURE
+            self._good_posture_streak = 0
+
+        # Gradual drift toward poor posture
+        s[HEAD_TILT]      += rng.uniform(-1.5, 2.0)
+        s[NECK_ANGLE]     += rng.uniform(-2.0, 0.5)
+        s[SHOULDER_DROP]  += rng.uniform(-0.2, 0.5)
+        s[BACK_CURVATURE] += rng.uniform(-0.5, 1.5)
+        s[SCREEN_DISTANCE]+= rng.uniform(-1.0, 1.0)
+
+        # Clip
+        s[HEAD_TILT]       = np.clip(s[HEAD_TILT],      -30,  30)
+        s[NECK_ANGLE]      = np.clip(s[NECK_ANGLE],     -45,  10)
+        s[SHOULDER_DROP]   = np.clip(s[SHOULDER_DROP],    0,  10)
+        s[BACK_CURVATURE]  = np.clip(s[BACK_CURVATURE],   0,  45)
+        s[SCREEN_DISTANCE] = np.clip(s[SCREEN_DISTANCE], 30,  90)
+        s[FATIGUE_LEVEL]   = np.clip(s[FATIGUE_LEVEL],    0,   1)
+
+    # ──────────────────────────────────────────────────────────────
+    # RENDER
+    # ──────────────────────────────────────────────────────────────
+    def render(self):
+        if self.render_mode == "human":
+            from environment.rendering import PostureRenderer
+            if self._renderer is None:
+                self._renderer = PostureRenderer()
+            self._renderer.render(self._state, self._step_count, self._total_reward)
+
+    def close(self):
+        if self._renderer is not None:
+            self._renderer.close()
+            self._renderer = None

@@ -1,3 +1,1 @@
-from environment.custom_env import OfficePostureEnv
-
-__all__ = ["OfficePostureEnv"]
+from environment.custom_env import PostureMonitorEnv
