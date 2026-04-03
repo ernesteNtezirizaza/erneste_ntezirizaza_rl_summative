@@ -256,7 +256,7 @@ This section connects the visuals to concrete learning behavior (stability, expl
 
 ### 1. Cumulative Reward Curves (All Methods)
 
-Figure: `plots/04_training_curves.png`
+![Cumulative Reward Curves](plots/04_training_curves.png)
 
 - All three methods show upward learning trends, confirming that the environment reward signal is learnable.
 - PPO achieves the most consistent high plateau over the final training window, which aligns with its best mean-of-means score (270.78 across 10 runs).
@@ -265,7 +265,7 @@ Figure: `plots/04_training_curves.png`
 
 ### 2. DQN Objective Curves
 
-Figure: `plots/08_dqn_objective.png`
+![DQN Objective Curves](plots/08_dqn_objective.png)
 
 - TD loss decreases over training, indicating Bellman residual reduction and improving value consistency.
 - Q-value estimates rise while exploration rate $\epsilon$ decays, showing a standard shift from exploration to exploitation.
@@ -273,7 +273,7 @@ Figure: `plots/08_dqn_objective.png`
 
 ### 3. Policy Entropy Curves (PG Methods)
 
-Figure: `plots/07_entropy_curves.png`
+![Policy Entropy Curves](plots/07_entropy_curves.png)
 
 - Entropy starts high and declines over time, which is expected as policies become more confident.
 - This demonstrates healthy exploration/exploitation transition: broad early action sampling, then sharper action preferences near convergence.
@@ -281,7 +281,7 @@ Figure: `plots/07_entropy_curves.png`
 
 ### 4. Convergence Comparison
 
-Figure: `plots/06_convergence.png`
+![Convergence Comparison](plots/06_convergence.png)
 
 - PPO converges fastest and sustains high reward more reliably in the final phase.
 - DQN converges more gradually but remains competitive in best-run performance.
@@ -290,7 +290,7 @@ Figure: `plots/06_convergence.png`
 
 ### 5. Hyperparameter Sensitivity
 
-Figure: `plots/05_hp_heatmap.png`
+![Hyperparameter Sensitivity](plots/05_hp_heatmap.png)
 
 - Performance is not uniform across $(\text{LR}, \gamma)$ settings; there are clear high-performing regions.
 - DQN shows sharper sensitivity, where small changes in exploration schedule and buffer/batch settings can produce large return differences.
@@ -298,7 +298,7 @@ Figure: `plots/05_hp_heatmap.png`
 
 ### 6. Generalization Across Unseen Seeds
 
-Figure: `plots/09_generalisation.png`
+![Generalization Across Unseen Seeds](plots/09_generalisation.png)
 
 - PPO maintains the highest and most stable mean reward over unseen seeds, supporting stronger policy robustness.
 - DQN generalizes reasonably but with wider spread than PPO.
@@ -306,7 +306,7 @@ Figure: `plots/09_generalisation.png`
 
 ### 7. Final Comparative Interpretation
 
-Figure: `plots/10_algorithm_comparison.png`
+![Final Comparative Interpretation](plots/10_algorithm_comparison.png)
 
 - Best single run: DQN (279.80 ± 4.35).
 - Best average across full sweep: PPO (270.78 mean-of-means).
